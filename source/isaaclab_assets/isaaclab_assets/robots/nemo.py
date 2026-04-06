@@ -12,8 +12,8 @@ place it at:
 
 **How to build ``nemo.usd``**
 
-1. Use your MuJoCo NEMO MJCF (e.g. ``nemo5.xml``) with mesh assets (``assets/*.stl``
-   next to the XML — same layout as MuJoCo expects).
+1. Use the MJCF under ``legged_rl-main/legged_rl-main/models/nemo/`` with mesh
+   assets (``assets/*.stl`` next to ``nemo5.xml`` — same layout as MuJoCo expects).
 2. In **Isaac Sim**: import MJCF (or convert via URDF if you prefer), fix any
    articulation root / joint names, then **Export** as USD to the path above.
 3. Joint names in the USD should match the MJCF actuator joints:
@@ -61,7 +61,6 @@ _HOME_LEG = (
     -0.523599,
     0.0,
 )
-
 
 NEMO_CFG = ArticulationCfg(
     prim_path="{ENV_REGEX_NS}/Robot",

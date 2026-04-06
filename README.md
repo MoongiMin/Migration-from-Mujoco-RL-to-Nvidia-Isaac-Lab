@@ -8,13 +8,29 @@ It does **not** include MuJoCo / Brax / `legged_rl` training code (keep that in 
 
 ---
 
+## Important Model File Locations
+
+When working with this repository, you must place the model files in specific locations:
+
+1. **Source MJCF (MuJoCo format):**
+   - The original `nemo5.xml` and its `assets/*.stl` files (from the `legged_rl` repository) should be used as the source for conversion.
+   - For stability during conversion on Windows, it is recommended to copy these to a short path like `C:\temp\nemo_mjcf\`.
+
+2. **Target USD (Isaac Sim format):**
+   - The converted USD file **must** be saved exactly here:
+     `source/isaaclab_assets/data/Robots/Nemo/nemo.usd`
+   - This repository provides a `.gitkeep` placeholder for this directory. The `.usd` file itself is large and ignored by git.
+
+---
+
 ## What is in this repository
 
 | Path | Purpose |
 |------|---------|
-| `source/isaaclab_assets/isaaclab_assets/robots/nemo.py` | `NEMO_CFG` (`ArticulationCfg`) aligned with MuJoCo `nemo5.xml`: 12 leg joint names, stiffness, damping, torque limits, and home pose. **No USD is shipped** — import MJCF in Isaac Sim, export `nemo.usd`, and place it at the path below. |
-| `source/isaaclab_assets/data/Robots/Nemo/.gitkeep` | Placeholder so the directory for `nemo.usd` exists in git. You generate and drop `nemo.usd` locally. |
+| `source/isaaclab_assets/isaaclab_assets/robots/nemo.py` | `NEMO_CFG` (`ArticulationCfg`) aligned with MuJoCo `nemo5.xml`: 12 leg joint names, stiffness, damping, torque limits, and home pose. |
+| `source/isaaclab_assets/data/Robots/Nemo/CONVERSION.md` | Detailed guide on how to convert the MJCF to USD, including troubleshooting for common crashes on Windows. |
 | `scripts/demos/nemo_viewer.py` | Demo that spawns NEMO in Isaac Sim when `nemo.usd` is present: holds default pose and resets periodically for a **visual sanity check**. |
+| `scripts/tools/` | Helper scripts for headless MJCF-to-USD conversion and fixing duplicate articulation roots in the generated USD. |
 
 ### What `nemo.py` does (summary)
 
@@ -33,11 +49,12 @@ It does **not** include MuJoCo / Brax / `legged_rl` training code (keep that in 
 
 1. From your cloned [Isaac Lab](https://github.com/isaac-sim/IsaacLab) root, copy these paths with the **same relative layout**:  
    - `source/isaaclab_assets/isaaclab_assets/robots/nemo.py`  
-   - `source/isaaclab_assets/data/Robots/Nemo/` (including `.gitkeep`; add `nemo.usd` here)  
+   - `source/isaaclab_assets/data/Robots/Nemo/` (including `CONVERSION.md` and `.gitkeep`)  
    - `scripts/demos/nemo_viewer.py`
+   - `scripts/tools/` (optional, for conversion helpers)
 2. `isaaclab_assets` often does **not** auto-import `nemo`. In the demo, import explicitly:  
    `from isaaclab_assets.robots.nemo import NEMO_CFG`
-3. Import MJCF (+ STL) in Isaac Sim and export to **`source/isaaclab_assets/data/Robots/Nemo/nemo.usd`**.
+3. Convert the MJCF to USD and save it to **`source/isaaclab_assets/data/Robots/Nemo/nemo.usd`** (see `CONVERSION.md` for details).
 4. Example run (Windows typically uses `isaaclab.bat`):
 
    ```bat

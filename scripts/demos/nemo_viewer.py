@@ -63,7 +63,7 @@ def design_scene(sim: SimulationContext) -> tuple[Articulation, torch.Tensor]:
     cfg.func("/World/Light", cfg)
 
     origins = torch.tensor([[0.0, 0.0, 0.0]], device=sim.device)
-    robot = Articulation(NEMO_CFG.replace(prim_path="/World/Nemo"))
+    robot = Articulation(NEMO_CFG.replace(prim_path="/World/Nemo/nemo5_importsafe/worldBody"))
     return robot, origins
 
 
@@ -94,7 +94,7 @@ def run_simulator(sim: SimulationContext, robot: Articulation, origins: torch.Te
 
 
 def main():
-    sim_cfg = sim_utils.SimulationCfg(dt=0.005, device=args_cli.device)
+    sim_cfg = sim_utils.SimulationCfg(dt=0.005, device=args_cli.device, use_fabric=False)
     sim = SimulationContext(sim_cfg)
     sim.set_camera_view(eye=[2.5, 2.5, 1.2], target=[0.0, 0.0, 0.8])
 
