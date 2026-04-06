@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+Thumbs.db
+
+# User-exported robot asset (large binary; keep local)
+source/isaaclab_assets/data/Robots/Nemo/nemo.usd
