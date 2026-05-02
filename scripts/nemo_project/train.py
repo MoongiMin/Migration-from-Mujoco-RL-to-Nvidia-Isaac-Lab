@@ -13,6 +13,9 @@ Usage (Run in terminal, NOT in Script Editor):
 
 import argparse
 import sys
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
+import h5py
 import gymnasium as gym
 
 from isaaclab.app import AppLauncher

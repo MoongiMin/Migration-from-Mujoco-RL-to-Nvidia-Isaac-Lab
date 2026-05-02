@@ -8,6 +8,8 @@ Usage:
 import argparse
 import sys
 import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
+import h5py
 import gymnasium as gym
 
 from isaaclab.app import AppLauncher
@@ -123,21 +125,31 @@ def main():
     latest_model = sorted(model_files, key=get_iteration)[-1]
     resume_path = os.path.join(run_dir, latest_model)
     
-    print(f"[INFO] Loading model from: {resume_path}")
+    print(f"[INFO] Loading model from: {resume_path}", flush=True)
     runner.load(resume_path)
         
     # Get the policy function
+    print("[INFO] Getting inference policy...", flush=True)
     policy = runner.get_inference_policy(device=env.unwrapped.device)
     
-    print("[INFO] Starting playback. Watch the robots walk!")
-    obs, _ = env.get_observations()
+    print("[INFO] Starting playback. Watch the robots walk!", flush=True)
+    obs = env.get_observations()
+    # Depending on IsaacLab version, get_observations might return a dict or tuple
+    if isinstance(obs, tuple):
+        obs = obs[0]
     
+    print("[INFO] Entering playback loop...", flush=True)
     # 5. Playback loop
+    step_count = 0
     while simulation_app.is_running():
         # Get actions from the trained policy
         actions = policy(obs)
         # Apply actions to the environment
-        obs, _, _, _ = env.step(actions)
+        step_returns = env.step(actions)
+        obs = step_returns[0]
+        step_count += 1
+        if step_count % 100 == 0:
+            print(f"[INFO] Performed {step_count} steps.", flush=True)
 
 if __name__ == "__main__":
     main()
