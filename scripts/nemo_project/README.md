@@ -79,7 +79,11 @@ Before running the training script, you need to install the reinforcement learni
    ```bash
    .\isaaclab.bat -p scripts\nemo_project\train.py --headless
    ```
-   *(Running in `--headless` mode skips the GUI to maximize training speed).*
+
+> **⚠️ IMPORTANT: DO NOT USE STANDARD PYTHON ⚠️**
+> You must **always** use `.\isaaclab.bat -p` to run any Python scripts in this project. 
+> If you try to run it with standard python (e.g., `python scripts\nemo_project\train.py`), you will get a `ModuleNotFoundError` for Isaac Sim packages because the standard python environment does not have Omniverse paths configured.
+> *(Running in `--headless` mode skips the GUI to maximize training speed).*
 
 3. The script will output metrics like `Mean reward` and `Mean episode length`. Model checkpoints will be saved automatically every 50 iterations in `logs/nemo_locomotion/`.
 
