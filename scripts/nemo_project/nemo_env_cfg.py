@@ -112,8 +112,8 @@ class RewardsCfg:
     joint_acc_l2 = RewTerm(func=mdp.joint_acc_l2, weight=-1e-7)
     
     # 4. Survival & Termination (Reward for staying alive, penalize falling)
-    is_alive = RewTerm(func=mdp.is_alive, weight=0.40)
-    is_terminated = RewTerm(func=mdp.is_terminated, weight=-0.0)
+    is_alive = RewTerm(func=mdp.is_alive, weight=1.0)
+    is_terminated = RewTerm(func=mdp.is_terminated, weight=-2.0)
     
     # 5. Joint Limits (Penalize pushing joints past their physical limits)
     joint_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-1.0)
@@ -124,12 +124,12 @@ class TerminationsCfg:
     Defines when an episode should end early.
     """
     time_out = DoneTerm(func=mdp.time_out, time_out=True) # Episode reaches max length
-    # base_contact = DoneTerm(
-    #     func=mdp.illegal_contact,
-    #     params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot.*"), "threshold": 1.0},
-    #     # Note: Currently set up to check if any feet collide, but standard practice
-    #     # is to check if the base/torso touches the ground. This can be modified later.
-    # )
+    
+    # Penalize when the base height falls below a threshold (falling over)
+    base_contact = DoneTerm(
+        func=mdp.root_height_below_minimum,
+        params={"minimum_height": 0.2}
+    )
 
 @configclass
 class SceneCfg(InteractiveSceneCfg):
