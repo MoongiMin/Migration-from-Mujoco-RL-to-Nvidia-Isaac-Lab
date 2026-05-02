@@ -31,6 +31,26 @@ When working with this repository, you must place the model files in specific lo
 | `source/isaaclab_assets/data/Robots/Nemo/CONVERSION.md` | Detailed guide on how to convert the MJCF to USD, including troubleshooting for common crashes on Windows. |
 | `scripts/demos/nemo_viewer.py` | Demo that spawns NEMO in Isaac Sim when `nemo.usd` is present: holds default pose and resets periodically for a **visual sanity check**. |
 | `scripts/tools/` | Helper scripts for headless MJCF-to-USD conversion and fixing duplicate articulation roots in the generated USD. |
+| `scripts/nemo_project/` | **NEW**: Complete RL training pipeline and environment configuration using IsaacLab `ManagerBasedRLEnv` and `rsl_rl`. |
+
+### Environment Setup (`pip` modules)
+To run the reinforcement learning training scripts located in `scripts/nemo_project/`, you must install the `rsl_rl` library. 
+IsaacLab provides a built-in command to install this extension. Open your terminal in the IsaacLab root directory and run:
+
+```bat
+.\isaaclab.bat -e rsl_rl
+```
+
+This will correctly install the `rsl_rl` Python package and the IsaacLab wrapper.
+
+### What `scripts/nemo_project` does (summary)
+
+- `nemo_cfg.py`: Updated asset configuration with collision adjustments.
+- `nemo_env_cfg.py`: Manager-based RL environment specifying observations, rewards, terminations, and commands.
+- `train.py`: PPO algorithm configuration to train the robot using `rsl_rl`.
+- `play.py`: Script to load the trained neural network (`model_*.pt`) and watch the robot walk in the GUI.
+- `test_nemo_in_gui.py`: Basic GUI spawn and PD control script for the Script Editor.
+- `README.md`: Step-by-step instructions on the IsaacLab integration and training process.
 
 ### What `nemo.py` does (summary)
 
@@ -67,9 +87,9 @@ Running Isaac Sim alongside heavy training (e.g. Brax) can use a lot of VRAM —
 
 ## Roadmap / next steps
 
-1. **Build and validate `nemo.usd`** — after MJCF import, verify joint names, axis directions, and contacts.
-2. **`ManagerBasedRLEnv` (or equivalent)** — port MuJoCo rewards, observations, and commands (e.g. joystick commands) to Isaac Lab observation / reward / action APIs.
-3. **Training pipeline with RSL-RL** (or Isaac Lab tutorial patterns) — checkpoints and evaluation loops.
+1. **(Completed)** **Build and validate `nemo.usd`** — verified joint names, axis directions, and added convex hull collision meshes.
+2. **(Completed)** **`ManagerBasedRLEnv` (or equivalent)** — ported MuJoCo rewards, observations, and commands to Isaac Lab configuration classes (`nemo_env_cfg.py`).
+3. **(Completed)** **Training pipeline with RSL-RL** — created `train.py` using `OnPolicyRunner` and tested `play.py` for evaluating policy checkpoints.
 4. **(Optional)** Decide whether to **transfer weights** from a MuJoCo-trained policy or **retrain from scratch** in Isaac.
 
 ---
