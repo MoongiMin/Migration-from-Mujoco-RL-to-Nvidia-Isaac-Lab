@@ -1,4 +1,4 @@
-# MuJoCo NEMO → NVIDIA Isaac Lab migration
+# MuJoCo NEMO → NVIDIA Isaac Lab migration (starter)
 
 This repository collects **asset configuration and demo scripts** for using the MuJoCo MJCF–based **NEMO** biped in **Isaac Lab**.  
 It does **not** include MuJoCo / Brax / `legged_rl` training code (keep that in a separate project).
@@ -46,9 +46,10 @@ This will correctly install the `rsl_rl` Python package and the IsaacLab wrapper
 ### What `scripts/nemo_project` does (summary)
 
 - `nemo_cfg.py`: Updated asset configuration with collision adjustments.
-- `nemo_env_cfg.py`: Manager-based RL environment specifying observations, rewards, terminations, and commands.
-- `train.py`: PPO algorithm configuration to train the robot using `rsl_rl`.
-- `play.py`: Script to load the trained neural network (`model_*.pt`) and watch the robot walk in the GUI.
+- `nemo_custom_mdp.py`: **NEW** 1:1 translation of custom JAX-based reward and observation functions from MuJoCo `joystick.py` to PyTorch for IsaacLab. Includes phase, air time, and detailed tracking logic.
+- `nemo_env_cfg.py`: Manager-based RL environment specifying observations, rewards, terminations, and commands. **Updated** to use `nemo_custom_mdp.py` functions and match MuJoCo contact sensors/noise scales.
+- `train.py`: PPO algorithm configuration to train the robot using `rsl_rl`. **Updated** to match `joystick.py` network size `[512, 256, 256, 128]` and hyperparameters.
+- `play.py`: Script to load the trained neural network (`model_*.pt`) and watch the robot walk in the GUI. **Updated** network size and added video recording feature (`--video`).
 - `test_nemo_in_gui.py`: Basic GUI spawn and PD control script for the Script Editor.
 - `README.md`: Step-by-step instructions on the IsaacLab integration and training process.
 

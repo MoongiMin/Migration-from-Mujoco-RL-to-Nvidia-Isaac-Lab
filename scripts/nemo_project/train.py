@@ -82,18 +82,18 @@ def main():
     
     # 3. Configure the PPO Algorithm (matching your legacy ppo_params roughly)
     runner_cfg = RslRlOnPolicyRunnerCfg(
-        num_steps_per_env=24,          # unroll_length
-        max_iterations=1500,           # Total iterations
+        num_steps_per_env=20,          # unroll_length
+        max_iterations=306,            # 50,000,000 / (8192 * 20) ~= 305
         save_interval=50,              # Checkpoint save interval
         experiment_name="nemo_locomotion",
-        empirical_normalization=False,
+        empirical_normalization=True,  # normalize_observations=True
         obs_groups={
             "actor": ["policy"],
             "critic": ["policy"],
         },
         actor=RslRlMLPModelCfg(
             class_name="MLPModel",
-            hidden_dims=[512, 256, 128],
+            hidden_dims=[512, 256, 256, 128],
             activation="elu",
             distribution_cfg=RslRlMLPModelCfg.GaussianDistributionCfg(
                 init_std=1.0,
@@ -101,7 +101,7 @@ def main():
         ),
         critic=RslRlMLPModelCfg(
             class_name="MLPModel",
-            hidden_dims=[512, 256, 128],
+            hidden_dims=[512, 256, 256, 128],
             activation="elu",
         ),
         algorithm=RslRlPpoAlgorithmCfg(
@@ -109,12 +109,12 @@ def main():
             value_loss_coef=1.0,
             use_clipped_value_loss=True,
             clip_param=0.2,             # clipping_epsilon
-            entropy_coef=0.01,          # entropy_cost
-            num_learning_epochs=5,
-            num_mini_batches=4,
-            learning_rate=1e-3,
+            entropy_coef=0.005,         # entropy_cost
+            num_learning_epochs=4,      # num_updates_per_batch
+            num_mini_batches=32,
+            learning_rate=3e-4,
             max_grad_norm=1.0,
-            gamma=0.99,
+            gamma=0.97,                 # discounting
             lam=0.95,
             desired_kl=0.01,
             schedule="adaptive",

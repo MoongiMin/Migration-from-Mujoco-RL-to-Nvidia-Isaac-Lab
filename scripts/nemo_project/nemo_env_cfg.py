@@ -12,23 +12,21 @@ from isaaclab.utils import configclass
 from isaaclab.envs.mdp.commands.commands_cfg import UniformVelocityCommandCfg
 from isaaclab.terrains.terrain_importer_cfg import TerrainImporterCfg
 from isaaclab.assets.asset_base_cfg import AssetBaseCfg
-from isaaclab.scene.interactive_scene_cfg import InteractiveSceneCfg
 from isaaclab.sim.spawners.lights.lights_cfg import DomeLightCfg
 import isaaclab.sim as sim_utils
 from isaaclab.utils.noise import UniformNoiseCfg
 
 # Import the previously created robot configuration
 from nemo_cfg import NEMO_CFG
+import nemo_custom_mdp as custom_mdp
 
 @configclass
 class CommandsCfg:
-    """Command specification for the environment.
-    Defines the joystick commands (linear velocity x/y and angular velocity yaw).
-    """
+    """Command specification for the environment."""
     base_velocity = UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(5.0, 10.0), # Sample new command every 5 to 10 seconds
-        rel_standing_envs=0.1, # 10% chance of setting the target command to exactly (0,0,0) (stand still)
+        resampling_time_range=(5.0, 10.0), 
+        rel_standing_envs=0.1, 
         ranges=UniformVelocityCommandCfg.Ranges(
             lin_vel_x=(-0.5, 0.5), 
             lin_vel_y=(-0.3, 0.3), 
@@ -39,40 +37,43 @@ class CommandsCfg:
 
 @configclass
 class ActionsCfg:
-    """Action specifications for the environment.
-    Maps neural network outputs to joint position targets.
-    """
+    """Action specifications for the environment."""
     joint_pos = mdp.JointPositionActionCfg(
         asset_name="robot",
-        joint_names=[".*"], # Control all joints
-        scale=1.5, # Matches legacy config.action_scale = 1.5
-        use_default_offset=True, # Network output is an offset relative to the default pose
+        joint_names=[".*"],
+        scale=1.5,
+        use_default_offset=True,
     )
 
 @configclass
 class ObservationsCfg:
-    """Observation specifications for the environment.
-    Defines what the neural network "sees" at every step.
-    """
+    """Observation specifications for the environment."""
     @configclass
     class PolicyCfg(ObsGroup):
-        """Observations for the base policy (Actor)."""
         # 1. Base linear and angular velocity (Local frame)
-        base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=UniformNoiseCfg(n_min=-0.1, n_max=0.1))
-        base_ang_vel = ObsTerm(func=mdp.base_ang_vel, noise=UniformNoiseCfg(n_min=-0.2, n_max=0.2))
+        filtered_linvel = ObsTerm(
+            func=custom_mdp.filtered_linvel, 
+            params={"command_name": "base_velocity", "contact_sensor_name": "contact_forces"},
+            noise=UniformNoiseCfg(n_min=-0.1, n_max=0.1)
+        )
+        filtered_angvel = ObsTerm(
+            func=custom_mdp.filtered_angvel, 
+            params={"command_name": "base_velocity", "contact_sensor_name": "contact_forces"},
+            noise=UniformNoiseCfg(n_min=-0.2, n_max=0.2)
+        )
         
-        # 2. Projected gravity (Provides base orientation information)
+        # 2. Projected gravity
         projected_gravity = ObsTerm(
             func=mdp.projected_gravity,
             noise=UniformNoiseCfg(n_min=-0.05, n_max=0.05)
         )
         
-        # 3. Velocity commands (The target velocities we want the robot to track)
+        # 3. Velocity commands
         velocity_commands = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
         
         # 4. Joint positions and velocities
         joint_pos = ObsTerm(
-            func=mdp.joint_pos_rel, # Relative to default pose
+            func=mdp.joint_pos_rel, 
             noise=UniformNoiseCfg(n_min=-0.03, n_max=0.03)
         )
         joint_vel = ObsTerm(
@@ -80,69 +81,75 @@ class ObservationsCfg:
             noise=UniformNoiseCfg(n_min=-1.5, n_max=1.5)
         )
         
-        # 5. Previous actions (Helps network understand its own past behavior)
-        actions = ObsTerm(func=mdp.last_action)
+        # 5. Previous actions
+        actions = ObsTerm(func=custom_mdp.last_action, params={"command_name": "base_velocity", "contact_sensor_name": "contact_forces"})
+        
+        # 6. Phase
+        phase = ObsTerm(func=custom_mdp.phase, params={"command_name": "base_velocity", "contact_sensor_name": "contact_forces"})
         
         def __post_init__(self):
-            self.enable_corruption = True # Enable the uniform noise added to sensors
+            self.enable_corruption = True
             self.concatenate_terms = True
 
-    # The RL algorithm expects the observations to be in a group called 'policy' (which is mapped to 'actor' by default)
     policy: PolicyCfg = PolicyCfg()
 
 @configclass
 class RewardsCfg:
-    """Reward specifications for the environment.
-    Defines the objective function and penalties for the agent.
-    """
-    # 1. Tracking Rewards (Reward the agent for following velocity commands)
-    track_lin_vel_xy_exp = RewTerm(
-        func=mdp.track_lin_vel_xy_exp, weight=1.0, params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
-    )
-    track_ang_vel_z_exp = RewTerm(
-        func=mdp.track_ang_vel_z_exp, weight=0.5, params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
-    )
+    """Reward specifications for the environment."""
+    # Tracking related rewards.
+    tracking_lin_vel = RewTerm(func=custom_mdp.tracking_lin_vel, weight=1.0, params={"command_name": "base_velocity", "contact_sensor_name": "contact_forces", "std": 0.25})
+    tracking_ang_vel = RewTerm(func=custom_mdp.tracking_ang_vel, weight=0.5, params={"command_name": "base_velocity", "contact_sensor_name": "contact_forces", "std": 0.25})
     
-    # 2. Base Related Penalties (Penalize excessive shaking/tilting)
-    ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.15)
-    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-1.0)
+    # Base related rewards.
+    lin_vel_z = RewTerm(func=custom_mdp.lin_vel_z, weight=0.0, params={"command_name": "base_velocity", "contact_sensor_name": "contact_forces"})
+    ang_vel_xy = RewTerm(func=custom_mdp.ang_vel_xy, weight=-0.15, params={"command_name": "base_velocity", "contact_sensor_name": "contact_forces"})
+    orientation = RewTerm(func=custom_mdp.orientation, weight=-1.0)
+    base_height = RewTerm(func=custom_mdp.base_height, weight=0.0, params={"target_height": 0.5793})
     
-    # 3. Energy/Action Penalties (Encourage smooth and efficient movements)
-    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.005)
-    joint_acc_l2 = RewTerm(func=mdp.joint_acc_l2, weight=-1e-7)
+    # Energy related rewards.
+    torques = RewTerm(func=custom_mdp.torques, weight=0.0)
+    action_rate = RewTerm(func=custom_mdp.action_rate, weight=-0.005, params={"command_name": "base_velocity", "contact_sensor_name": "contact_forces"})
+    energy = RewTerm(func=custom_mdp.energy, weight=0.0)
+    dof_acc = RewTerm(func=custom_mdp.dof_acc, weight=-1e-7)
+    dof_vel = RewTerm(func=custom_mdp.dof_vel, weight=0.0)
     
-    # 4. Survival & Termination (Reward for staying alive, penalize falling)
-    is_alive = RewTerm(func=mdp.is_alive, weight=1.0)
-    is_terminated = RewTerm(func=mdp.is_terminated, weight=-2.0)
+    # Feet related rewards.
+    feet_clearance = RewTerm(func=custom_mdp.feet_clearance, weight=0.0, params={"contact_sensor_name": "contact_forces", "max_foot_height": 0.10})
+    feet_air_time = RewTerm(func=custom_mdp.feet_air_time, weight=2.0, params={"command_name": "base_velocity", "contact_sensor_name": "contact_forces"})
+    feet_slip = RewTerm(func=custom_mdp.feet_slip, weight=-0.25, params={"command_name": "base_velocity", "contact_sensor_name": "contact_forces"})
+    feet_height = RewTerm(func=custom_mdp.feet_height, weight=0.0, params={"command_name": "base_velocity", "contact_sensor_name": "contact_forces", "max_foot_height": 0.10})
+    feet_phase = RewTerm(func=custom_mdp.feet_phase, weight=1.0, params={"command_name": "base_velocity", "contact_sensor_name": "contact_forces", "max_foot_height": 0.10})
     
-    # 5. Joint Limits (Penalize pushing joints past their physical limits)
-    joint_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-1.0)
+    # Other rewards.
+    stand_still = RewTerm(func=custom_mdp.stand_still, weight=0.0, params={"command_name": "base_velocity"})
+    alive = RewTerm(func=mdp.is_alive, weight=0.40)
+    termination = RewTerm(func=mdp.is_terminated, weight=0.0)
+    
+    # Pose related rewards.
+    joint_deviation_knee = RewTerm(func=custom_mdp.joint_deviation_knee, weight=-0.1)
+    joint_deviation_hip = RewTerm(func=custom_mdp.joint_deviation_hip, weight=-0.1, params={"command_name": "base_velocity"})
+    dof_pos_limits = RewTerm(func=custom_mdp.joint_pos_limits, weight=-1.0)
+    pose = RewTerm(func=custom_mdp.pose, weight=-1.0)
+    feet_distance = RewTerm(func=custom_mdp.feet_distance, weight=-1.0, params={"contact_sensor_name": "contact_forces"})
+    collision = RewTerm(func=custom_mdp.collision, weight=-1.0, params={"contact_sensor_name": "contact_forces"})
+    feet_contact = RewTerm(func=custom_mdp.feet_contact, weight=-0.25, params={"command_name": "base_velocity", "contact_sensor_name": "contact_forces", "max_foot_height": 0.10})
 
 @configclass
 class TerminationsCfg:
-    """Termination specifications for the environment.
-    Defines when an episode should end early.
-    """
-    time_out = DoneTerm(func=mdp.time_out, time_out=True) # Episode reaches max length
-    
-    # Penalize when the base height falls below a threshold (falling over)
+    """Termination specifications for the environment."""
+    time_out = DoneTerm(func=mdp.time_out, time_out=True)
     base_contact = DoneTerm(
         func=mdp.root_height_below_minimum,
-        params={"minimum_height": 0.4}
+        params={"minimum_height": 0.2}
     )
 
 @configclass
 class SceneCfg(InteractiveSceneCfg):
-    """Scene specification for the environment.
-    Defines what objects are spawned in the world.
-    """
-    # Spawn a flat ground plane
+    """Scene specification for the environment."""
     terrain = TerrainImporterCfg(
         prim_path="/World/ground",
         terrain_type="plane",
     )
-    
-    # Spawn a dome light
     light = AssetBaseCfg(
         prim_path="/World/skyLight",
         spawn=sim_utils.DomeLightCfg(
@@ -150,23 +157,20 @@ class SceneCfg(InteractiveSceneCfg):
             color=(0.75, 0.75, 0.75)
         )
     )
-    
-    # Spawn the Nemo robot using the NEMO_CFG from nemo_cfg.py
     robot = NEMO_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
-    # contact_forces = ContactSensorCfg(
-    #     prim_path="{ENV_REGEX_NS}/Robot/.*_foot_.*",
-    #     update_period=0.0,
-    #     history_length=3,
-    #     debug_vis=False,
-    #     filter_prim_paths_expr=[],
-    #     track_air_time=False,
-    # )
+    contact_forces = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/pelvis/.*foot_roll",
+        update_period=0.0,
+        history_length=3,
+        debug_vis=False,
+        track_air_time=True,
+    )
 
 @configclass
 class NemoEnvCfg(ManagerBasedRLEnvCfg):
     """The main environment configuration for Nemo."""
-    scene: SceneCfg = SceneCfg(num_envs=4096, env_spacing=2.5) # Spawn 4096 environments in parallel
+    scene: SceneCfg = SceneCfg(num_envs=8192, env_spacing=2.5)
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
     commands: CommandsCfg = CommandsCfg()
@@ -174,14 +178,7 @@ class NemoEnvCfg(ManagerBasedRLEnvCfg):
     terminations: TerminationsCfg = TerminationsCfg()
 
     def __post_init__(self):
-        # Control frequency logic:
-        # IsaacLab base physics step is typically 0.005s.
-        # decimation = 4 means policy runs every 0.02s (0.005 * 4), matching legacy ctrl_dt=0.02
         self.decimation = 4
-        
-        # Max episode length: 10.0 seconds (matches legacy episode_length=500 steps * 0.02s)
         self.episode_length_s = 10.0
-        
-        # Default camera position in the viewer
         self.viewer.eye = (1.5, 1.5, 1.0)
         self.viewer.lookat = (0.0, 0.0, 0.5)
