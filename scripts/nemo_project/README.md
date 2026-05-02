@@ -90,12 +90,14 @@ Before running the training script, you need to install the reinforcement learni
 ---
 
 ## Step 6: Watch the Trained Robot (Play)
-After training is complete (or you have generated checkpoints in the `logs` folder), you can load the trained neural network and watch the robot walk in the GUI!
+After training is complete (or you have generated checkpoints in the `logs` folder), you can load the trained neural network and watch the robot walk!
 
-1. Close any running instances of Isaac Sim.
-2. Open your terminal.
-3. Run the playback script (this script automatically turns on the GUI so you can watch):
-   ```bash
-   .\isaaclab.bat -p scripts\nemo_project\play.py
-   ```
-   *(This script spawns 36 robots in a grid and applies the trained policy to all of them simultaneously.)*
+### Visualization & Video Recording
+
+To visualize the trained policy, you must run it with the `isaaclab.bat` script. Since there are known Vulkan rendering crashes on some Windows setups, we recommend using the `--kit_args="--/app/vulkan=false"` flag to force DirectX 12 (D3D12) rendering.
+
+To record a video of the robot walking (headless mode, no GUI window):
+```powershell
+.\isaaclab.bat -p scripts\nemo_project\play.py --headless --video --enable_cameras --kit_args="--/app/vulkan=false"
+```
+The video will be saved in `logs/nemo_locomotion/videos/rl-video-step-0.mp4`.
