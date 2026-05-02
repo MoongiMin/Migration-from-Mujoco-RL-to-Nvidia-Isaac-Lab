@@ -118,11 +118,6 @@ def main():
         ),
     )
     
-    # Initialize runner and load the policy
-    installed_version = metadata.version("rsl-rl-lib")
-    runner_cfg = handle_deprecated_rsl_rl_cfg(runner_cfg, installed_version)
-    runner = OnPolicyRunner(env, runner_cfg.to_dict(), log_dir=run_dir, device=env.unwrapped.device)
-    
     # Find the latest model file in the directory
     model_files = [f for f in os.listdir(run_dir) if f.startswith("model_") and f.endswith(".pt")]
     if not model_files:
@@ -135,10 +130,15 @@ def main():
         except ValueError:
             return -1
             
-    latest_model = sorted(model_files, key=get_iteration)[-1]
+    latest_model = "model_305.pt"
     resume_path = os.path.join(run_dir, latest_model)
     
     print(f"[INFO] Loading model from: {resume_path}", flush=True)
+    
+    # Initialize runner and load the policy
+    installed_version = metadata.version("rsl-rl-lib")
+    runner_cfg = handle_deprecated_rsl_rl_cfg(runner_cfg, installed_version)
+    runner = OnPolicyRunner(env, runner_cfg.to_dict(), log_dir=run_dir, device=env.unwrapped.device)
     runner.load(resume_path)
         
     # Get the policy function

@@ -77,8 +77,8 @@ def get_nemo_state(env: "ManagerBasedRLEnv", command_name: str, asset_name: str 
         
         # Velocity update
         # Local linvel:
-        vel_yaw = quat_apply_inverse(yaw_quat(asset.data.root_quat_w[idx]), asset.data.root_lin_vel_w[idx, :3])
-        env.nemo_state["filtered_linvel"][idx] = vel_yaw * 1.0 # filtered = current * 1.0 + old * 0.0
+        linvel = quat_apply_inverse(asset.data.root_quat_w[idx], asset.data.root_lin_vel_w[idx, :3])
+        env.nemo_state["filtered_linvel"][idx] = linvel * 1.0 # filtered = current * 1.0 + old * 0.0
         # Local angvel:
         angvel = quat_apply_inverse(asset.data.root_quat_w[idx], asset.data.root_ang_vel_w[idx, :3])
         env.nemo_state["filtered_angvel"][idx] = angvel * 1.0
@@ -312,8 +312,17 @@ def joint_pos_limits(env: "ManagerBasedRLEnv", asset_name: str = "robot", soft_l
 def pose(env: "ManagerBasedRLEnv", asset_name: str = "robot") -> torch.Tensor:
     asset = env.scene[asset_name]
     default_pos = asset.data.default_joint_pos
-    weights = torch.tensor([0.01, 1.0, 1.0, 0.01, 1.0, 1.0, 0.01, 1.0, 1.0, 0.01, 1.0, 1.0], device=env.device)
-    return torch.sum(torch.square(asset.data.joint_pos - default_pos) * weights, dim=1)
+    
+    if not hasattr(env, "nemo_pose_weights"):
+        weights = torch.ones(asset.num_joints, device=env.device)
+        for i, name in enumerate(asset.data.joint_names):
+            if "hip_pitch" in name or "knee" in name:
+                weights[i] = 0.01
+            else:
+                weights[i] = 1.0
+        env.nemo_pose_weights = weights
+        
+    return torch.sum(torch.square(asset.data.joint_pos - default_pos) * env.nemo_pose_weights, dim=1)
 
 def feet_distance(env: "ManagerBasedRLEnv", contact_sensor_name: str, asset_name: str = "robot") -> torch.Tensor:
     asset = env.scene[asset_name]
@@ -336,16 +345,19 @@ def joint_deviation_hip(env: "ManagerBasedRLEnv", command_name: str, asset_name:
     asset = env.scene[asset_name]
     commands = env.command_manager.get_command(command_name)
     default_pos = asset.data.default_joint_pos
-    # Hip joints in Nemo are usually indices 0, 1 for left and 6, 7 for right
-    # Specifically roll, yaw, pitch... Let's penalize all roll/yaw.
-    hip_indices = [0, 1, 6, 7]
-    cost = torch.sum(torch.abs(asset.data.joint_pos[:, hip_indices] - default_pos[:, hip_indices]), dim=1)
+    
+    if not hasattr(env, "nemo_hip_indices"):
+        env.nemo_hip_indices = [i for i, name in enumerate(asset.data.joint_names) if "hip_roll" in name or "hip_yaw" in name]
+        
+    cost = torch.sum(torch.abs(asset.data.joint_pos[:, env.nemo_hip_indices] - default_pos[:, env.nemo_hip_indices]), dim=1)
     cost *= (torch.abs(commands[:, 1]) > 0.1)
     return cost
 
 def joint_deviation_knee(env: "ManagerBasedRLEnv", asset_name: str = "robot") -> torch.Tensor:
     asset = env.scene[asset_name]
     default_pos = asset.data.default_joint_pos
-    # Knee indices are 3, 9
-    knee_indices = [3, 9]
-    return torch.sum(torch.abs(asset.data.joint_pos[:, knee_indices] - default_pos[:, knee_indices]), dim=1)
+    
+    if not hasattr(env, "nemo_knee_indices"):
+        env.nemo_knee_indices = [i for i, name in enumerate(asset.data.joint_names) if "knee" in name]
+        
+    return torch.sum(torch.abs(asset.data.joint_pos[:, env.nemo_knee_indices] - default_pos[:, env.nemo_knee_indices]), dim=1)
