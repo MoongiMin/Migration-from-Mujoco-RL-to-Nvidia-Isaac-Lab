@@ -16,6 +16,8 @@ from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description="Play a trained RL agent for Nemo.")
 parser.add_argument("--task", type=str, default="Nemo-Flat-v0", help="Name of the task.")
+parser.add_argument("--video", action="store_true", default=False, help="Record video of the playback.")
+parser.add_argument("--video_length", type=int, default=400, help="Length of the recorded video (in steps).")
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
 
@@ -56,7 +58,18 @@ def main():
     env_cfg.scene.num_envs = 36 # Spawn 36 robots to watch them walk
     
     # 2. Create the environment
-    env = gym.make(args_cli.task, cfg=env_cfg)
+    env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array")
+    
+    if args_cli.video:
+        video_dir = os.path.join("logs/nemo_locomotion", "videos")
+        print(f"[INFO] Recording video to: {video_dir}", flush=True)
+        env = gym.wrappers.RecordVideo(
+            env, 
+            video_dir, 
+            step_trigger=lambda step: step == 0, 
+            video_length=args_cli.video_length
+        )
+    
     env = RslRlVecEnvWrapper(env)
     
     # 3. Find the trained model directory
@@ -144,8 +157,10 @@ def main():
     while simulation_app.is_running():
         # Get actions from the trained policy
         actions = policy(obs)
+        print("[DEBUG] Policy generated actions", flush=True)
         # Apply actions to the environment
         step_returns = env.step(actions)
+        print("[DEBUG] Env stepped", flush=True)
         obs = step_returns[0]
         step_count += 1
         if step_count % 100 == 0:
