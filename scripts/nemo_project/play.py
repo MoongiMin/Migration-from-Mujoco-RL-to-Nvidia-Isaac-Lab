@@ -61,7 +61,7 @@ def main():
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array")
     
     if args_cli.video:
-        video_dir = os.path.join("logs/nemo_locomotion", "videos")
+        video_dir = os.path.abspath("logs/nemo_locomotion/videos").replace("\\", "/")
         print(f"[INFO] Recording video to: {video_dir}", flush=True)
         env = gym.wrappers.RecordVideo(
             env, 
@@ -157,14 +157,20 @@ def main():
     while simulation_app.is_running():
         # Get actions from the trained policy
         actions = policy(obs)
-        print("[DEBUG] Policy generated actions", flush=True)
         # Apply actions to the environment
         step_returns = env.step(actions)
-        print("[DEBUG] Env stepped", flush=True)
         obs = step_returns[0]
         step_count += 1
+        
         if step_count % 100 == 0:
             print(f"[INFO] Performed {step_count} steps.", flush=True)
+            
+        if args_cli.video and step_count >= args_cli.video_length:
+            print(f"[INFO] Video recording finished ({args_cli.video_length} steps). Exiting...", flush=True)
+            break
+
+    # Clean up environment properly so the video is saved
+    env.close()
 
 if __name__ == "__main__":
     main()
