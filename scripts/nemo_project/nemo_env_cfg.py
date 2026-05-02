@@ -128,7 +128,7 @@ class TerminationsCfg:
     # Penalize when the base height falls below a threshold (falling over)
     base_contact = DoneTerm(
         func=mdp.root_height_below_minimum,
-        params={"minimum_height": 0.2}
+        params={"minimum_height": 0.4}
     )
 
 @configclass
