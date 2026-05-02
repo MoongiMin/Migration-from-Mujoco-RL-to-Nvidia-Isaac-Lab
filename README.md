@@ -1,4 +1,4 @@
-# MuJoCo NEMO → NVIDIA Isaac Lab migration (starter)
+# MuJoCo NEMO → NVIDIA Isaac Lab migration
 
 This repository collects **asset configuration and demo scripts** for using the MuJoCo MJCF–based **NEMO** biped in **Isaac Lab**.  
 It does **not** include MuJoCo / Brax / `legged_rl` training code (keep that in a separate project).
