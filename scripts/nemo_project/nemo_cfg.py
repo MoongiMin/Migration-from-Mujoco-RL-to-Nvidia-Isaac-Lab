@@ -2,54 +2,84 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg
 from isaaclab.actuators import ImplicitActuatorCfg
 
-# =========================================================================
-# Nemo Robot Configuration (ArticulationCfg)
-# =========================================================================
+# ----------------------------------------------------------------------------
+# Align with ``source/isaaclab_assets/isaaclab_assets/robots/nemo.py``.
+# Earlier local edits (uniform actuators without ``effort_limit_sim``,
+# self-collisions ON, elevated spawn drop) tended to explode into NaNs in
+# thousand-env training.
+#
+# modest +12% torque headroom vs asset defaults — ablation for dynamic pushes;
+# revert if NaNs return. (Keep stiffness unchanged for one-axis-ish physics tweaks.)
+# ----------------------------------------------------------------------------
+_KP_HIGH = 50.0
+_KP_LOW = 40.0
+_JOINT_DAMPING = 1.0
+_TAU_HIGH = 53.0
+_TAU_LOW = 26.5
+
+_HOME_LEG = (
+    -0.698132,
+    0.0,
+    0.0,
+    1.22173,
+    -0.523599,
+    0.0,
+)
+
 NEMO_CFG = ArticulationCfg(
-    # ---------------------------------------------------------------------
-    # USD file path and basic physics properties
-    # ---------------------------------------------------------------------
     spawn=sim_utils.UsdFileCfg(
-            usd_path="C:/Users/mmgzz/Desktop/IsaacLab/source/isaaclab_assets/data/Robots/Nemo/nemo.usd",
-            activate_contact_sensors=True,
-            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+        usd_path="C:/Users/mmgzz/Desktop/IsaacLab/source/isaaclab_assets/data/Robots/Nemo/nemo.usd",
+        activate_contact_sensors=True,
+        copy_from_source=False,
+        rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
-            max_depenetration_velocity=10.0,
-            enable_gyroscopic_forces=True,
+            retain_accelerations=False,
+            linear_damping=0.0,
+            angular_damping=0.0,
+            max_linear_velocity=1000.0,
+            max_angular_velocity=1000.0,
+            max_depenetration_velocity=1.0,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=False, # Whether robot links can collide with each other
+            enabled_self_collisions=False,
             solver_position_iteration_count=4,
-            solver_velocity_iteration_count=0,
+            solver_velocity_iteration_count=4,
         ),
     ),
-    # ---------------------------------------------------------------------
-    # Initial state (position, orientation, joint angles)
-    # ---------------------------------------------------------------------
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.6), # Initial spawn position (x, y, z) - elevated to drop safely
-        rot=(1.0, 0.0, 0.0, 0.0), # Initial rotation (w, x, y, z) quaternion
+        pos=(0.0, 0.0, 0.5793),
+        rot=(1.0, 0.0, 0.0, 0.0),
         joint_pos={
-            # Default standing pose (slightly bent knees for stability)
-            ".*_hip_pitch": 0.2,
-            ".*_knee": -0.2,
-            ".*_foot_pitch": 0.2,
-            ".*_hip_roll": 0.0,
-            ".*_hip_yaw": 0.0,
-            ".*_foot_roll": 0.0,
+            "l_hip_pitch": _HOME_LEG[0],
+            "l_hip_roll": _HOME_LEG[1],
+            "l_hip_yaw": _HOME_LEG[2],
+            "l_knee": _HOME_LEG[3],
+            "l_foot_pitch": _HOME_LEG[4],
+            "l_foot_roll": _HOME_LEG[5],
+            "r_hip_pitch": _HOME_LEG[0],
+            "r_hip_roll": _HOME_LEG[1],
+            "r_hip_yaw": _HOME_LEG[2],
+            "r_knee": _HOME_LEG[3],
+            "r_foot_pitch": _HOME_LEG[4],
+            "r_foot_roll": _HOME_LEG[5],
         },
-        joint_vel={
-            ".*": 0.0, # Set initial velocity of all joints to 0.0
-        },
+        joint_vel={".*": 0.0},
     ),
-    # ---------------------------------------------------------------------
-    # Actuators configuration - PD Controller
-    # ---------------------------------------------------------------------
     actuators={
-        "nemo_joints": ImplicitActuatorCfg(
-            joint_names_expr=[".*"], # Joint names to control (regex: all joints)
-            stiffness=800.0,         # P gain (increased to hold the robot's weight)
-            damping=80.0,            # D gain (increased to prevent oscillation)
+        "legs_high": ImplicitActuatorCfg(
+            joint_names_expr=[".*_hip_pitch", ".*_knee", ".*_foot_pitch"],
+            stiffness=_KP_HIGH,
+            damping=_JOINT_DAMPING,
+            effort_limit_sim=_TAU_HIGH,
+            armature=0.005,
+        ),
+        "legs_low": ImplicitActuatorCfg(
+            joint_names_expr=[".*_hip_roll", ".*_hip_yaw", ".*_foot_roll"],
+            stiffness=_KP_LOW,
+            damping=_JOINT_DAMPING,
+            effort_limit_sim=_TAU_LOW,
+            armature=0.005,
         ),
     },
+    soft_joint_pos_limit_factor=0.95,
 )

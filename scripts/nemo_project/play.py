@@ -16,6 +16,12 @@ from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description="Play a trained RL agent for Nemo.")
 parser.add_argument("--task", type=str, default="Nemo-Flat-v0", help="Name of the task.")
+parser.add_argument(
+    "--checkpoint",
+    type=str,
+    default=None,
+    help="Path to a saved .pt file. If omitted: use latest logs/nemo_locomotion/model_*.pt, else bundled checkpoints/nemo_locomotion_latest.pt.",
+)
 parser.add_argument("--video", action="store_true", default=False, help="Record video of the playback.")
 parser.add_argument("--video_length", type=int, default=400, help="Length of the recorded video (in steps).")
 AppLauncher.add_app_launcher_args(parser)
@@ -72,12 +78,44 @@ def main():
     
     env = RslRlVecEnvWrapper(env)
     
-    # 3. Find the trained model directory
+    # 3. Resolve checkpoint path (optional explicit path vs logs vs bundled artifact)
+    _script_dir = os.path.dirname(os.path.abspath(__file__))
+    bundled_ckpt = os.path.join(_script_dir, "checkpoints", "nemo_locomotion_latest.pt")
+
+    def _iter_from_model_name(filename: str) -> int:
+        try:
+            return int(filename.split("_")[1].split(".")[0])
+        except (IndexError, ValueError):
+            return -1
+
     run_dir = "logs/nemo_locomotion"
-    if not os.path.exists(run_dir):
-        print(f"[ERROR] No trained models found in {run_dir}. Please run train.py first.")
+    resume_path = None
+
+    if args_cli.checkpoint:
+        resume_path = os.path.abspath(args_cli.checkpoint)
+        if not os.path.isfile(resume_path):
+            print(f"[ERROR] Checkpoint not found: {resume_path}")
+            return
+        run_dir = os.path.dirname(resume_path)
+    elif os.path.exists(run_dir):
+        candidates = [
+            f for f in os.listdir(run_dir) if f.startswith("model_") and f.endswith(".pt")
+        ]
+        if candidates:
+            resume_path = os.path.join(run_dir, max(candidates, key=_iter_from_model_name))
+
+    if resume_path is None and os.path.isfile(bundled_ckpt):
+        print(f"[INFO] Using bundled checkpoint: {bundled_ckpt}")
+        resume_path = bundled_ckpt
+        run_dir = os.path.dirname(resume_path)
+
+    if resume_path is None:
+        print(
+            f"[ERROR] No checkpoint found under {run_dir} (expect model_*.pt), "
+            "no bundled checkpoints/nemo_locomotion_latest.pt, and --checkpoint not set."
+        )
         return
-        
+
     # 4. Configure runner to load the model
     runner_cfg = RslRlOnPolicyRunnerCfg(
         num_steps_per_env=20,
@@ -86,7 +124,7 @@ def main():
         empirical_normalization=True,
         obs_groups={
             "actor": ["policy"],
-            "critic": ["policy"],
+            "critic": ["policy", "privileged"],
         },
         actor=RslRlMLPModelCfg(
             class_name="MLPModel",
@@ -117,22 +155,7 @@ def main():
             schedule="adaptive",
         ),
     )
-    
-    # Find the latest model file in the directory
-    model_files = [f for f in os.listdir(run_dir) if f.startswith("model_") and f.endswith(".pt")]
-    if not model_files:
-        print(f"[ERROR] Could not find any model_*.pt files in {run_dir}")
-        return
-        
-    def get_iteration(filename):
-        try:
-            return int(filename.split("_")[1].split(".")[0])
-        except ValueError:
-            return -1
-            
-    latest_model = "model_305.pt"
-    resume_path = os.path.join(run_dir, latest_model)
-    
+
     print(f"[INFO] Loading model from: {resume_path}", flush=True)
     
     # Initialize runner and load the policy
@@ -144,7 +167,7 @@ def main():
     # Get the policy function
     print("[INFO] Getting inference policy...", flush=True)
     policy = runner.get_inference_policy(device=env.unwrapped.device)
-    
+
     print("[INFO] Starting playback. Watch the robots walk!", flush=True)
     obs = env.get_observations()
     # Depending on IsaacLab version, get_observations might return a dict or tuple
@@ -152,24 +175,32 @@ def main():
         obs = obs[0]
     
     print("[INFO] Entering playback loop...", flush=True)
-    # 5. Playback loop
+    # 5. Playback loop — inference_mode avoids autograd teardown issues on Windows at env.close().
     step_count = 0
-    while simulation_app.is_running():
-        # Get actions from the trained policy
-        actions = policy(obs)
-        # Apply actions to the environment
-        step_returns = env.step(actions)
-        obs = step_returns[0]
-        step_count += 1
-        
-        if step_count % 100 == 0:
-            print(f"[INFO] Performed {step_count} steps.", flush=True)
-            
-        if args_cli.video and step_count >= args_cli.video_length:
-            print(f"[INFO] Video recording finished ({args_cli.video_length} steps). Exiting...", flush=True)
-            break
+    with torch.inference_mode():
+        while simulation_app.is_running():
+            actions = policy(obs)
+            step_returns = env.step(actions)
+            obs = step_returns[0]
+            step_count += 1
 
-    # Clean up environment properly so the video is saved
+            if step_count % 100 == 0:
+                print(f"[INFO] Performed {step_count} steps.", flush=True)
+
+            if args_cli.video and step_count >= args_cli.video_length:
+                print(f"[INFO] Video recording finished ({args_cli.video_length} steps). Exiting...", flush=True)
+                break
+
+    # RecordVideo.close() closes Isaac before stop_recording(); flush mp4 here first.
+    if args_cli.video:
+        recorder = getattr(env, "env", None)
+        if recorder is not None and getattr(recorder, "recording", False):
+            print("[INFO] Finalizing video (stop_recording) before Isaac env shutdown...", flush=True)
+            recorder.stop_recording()
+
+    del runner
+    del policy
+
     env.close()
 
 if __name__ == "__main__":

@@ -47,11 +47,11 @@ def main():
     sim_time = 0.0
     while simulation_app.is_running():
         # Calculate target joint positions (Sine wave)
-        # 관절 각도를 -0.5 ~ 0.5 라디안 사이로 움직이게 합니다.
+        # Sweep joint offsets roughly in [-0.5, 0.5] rad (amplitude 0.5).
         target_pos = 0.5 * math.sin(sim_time * 2.0)
         
         # Create a tensor with the target position for all joints
-        # nemo_robot.num_joints는 로봇의 총 관절 개수입니다.
+        # nemo_robot.num_joints is the total number of actuated joints.
         joint_targets = torch.full((1, nemo_robot.num_joints), target_pos, device=sim.device)
 
         # Apply the target positions to the robot's PD controller
