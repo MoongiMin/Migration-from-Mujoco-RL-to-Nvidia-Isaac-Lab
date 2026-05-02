@@ -83,7 +83,7 @@ def main():
     # 3. Configure the PPO Algorithm (matching your legacy ppo_params roughly)
     runner_cfg = RslRlOnPolicyRunnerCfg(
         num_steps_per_env=20,          # unroll_length
-        max_iterations=306,            # 50,000,000 / (8192 * 20) ~= 305
+        max_iterations=100,            # Reduced for faster testing (original: 306)
         save_interval=50,              # Checkpoint save interval
         experiment_name="nemo_locomotion",
         empirical_normalization=True,  # normalize_observations=True
